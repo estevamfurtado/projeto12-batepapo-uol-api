@@ -1,6 +1,6 @@
 import express, { json } from 'express';
 import cors from 'cors';
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import joi from 'joi';
 import dayjs from 'dayjs';
@@ -92,6 +92,7 @@ app.get('/participants', async (req, res) => {
     }
 });
 
+
 // Mensagens
 
 app.post('/messages', async (req, res) => {
@@ -162,6 +163,73 @@ app.get('/messages', async (req, res) => {
         res.status(500).send('erro :(');
         mongoClient.close();
     }
+});
+
+app.delete('/messages/:messageId', async (req, res) => {
+
+    const user = req.headers.user;
+    const { messageId } = req.params;
+    let message = null;
+
+    try {
+        const result = await mongoClient.connect();
+        const messagesCollection = mongoClient.db("batepapo-uol").collection("messages");
+        const objId = new ObjectId(messageId);
+        message = await messagesCollection.findOne({ _id: objId });
+
+        if (message.from === user) {
+            await messagesCollection.deleteOne({ _id: objId });
+            res.sendStatus(200);
+        }
+        else {
+            res.sendStatus(401);
+        }
+
+        mongoClient.close();
+    } catch (error) {
+        res.sendStatus(404);
+        mongoClient.close();
+    }
+
+});
+
+app.put('/messages/:messageId', async (req, res) => {
+
+    const { to, text, type } = req.body;
+    const from = req.headers.user;
+    const { messageId } = req.params;
+
+    const messageObj = { from: from, to: to, text: text, type: type };
+    const messageValidation = messageSchema.validate(messageObj, { abortEarly: true });
+
+    if (messageValidation.error) {
+        res.sendStatus(422);
+        return;
+    }
+
+    try {
+        const result = await mongoClient.connect();
+        const messagesCollection = mongoClient.db("batepapo-uol").collection("messages");
+        const objId = new ObjectId(messageId);
+        const messageEl = await messagesCollection.findOne({ _id: objId });
+
+        if (messageEl.from === from) {
+            await messagesCollection.updateOne(
+                { _id: objId },
+                { $set: { text: text } }
+            )
+            res.sendStatus(200);
+        }
+        else {
+            res.sendStatus(401);
+        }
+
+        mongoClient.close();
+    } catch (error) {
+        res.sendStatus(404);
+        mongoClient.close();
+    }
+
 });
 
 // Status
