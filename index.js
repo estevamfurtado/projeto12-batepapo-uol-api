@@ -13,29 +13,54 @@ app.use(json());
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 
+const nameSchema = joi.object({
+    name: joi.string().required()
+});
+
+const lastStatusSchema = joi.object({
+    lastStatus: joi.date().required()
+});
+
+const messageSchema = joi.object({
+    from: joi.string().required(),
+    to: joi.string().required(),
+    text: joi.string().required(),
+    time: joi.string().required()
+});
+
+
 
 app.post('/participants', async (req, res) => {
 
     const { name } = req.body;
+
+    const validation = nameSchema.validate({ name }, { abortEarly: true });
+    if (validation.error) {
+        res.sendStatus(402);
+        return;
+    }
 
     try {
         const result = await mongoClient.connect();
         const participantsCollection = mongoClient.db("batepapo-uol").collection("participants");
         const messagesCollection = mongoClient.db("batepapo-uol").collection("messages");
 
-        // ... validar
-
         const participant = await participantsCollection.findOne({ name: name });
+
+        if (participant) {
+            res.sendStatus(402);
+            return;
+        }
 
         await participantsCollection.insertOne({ name: name, lastStatus: Date.now() })
         await messagesCollection.insertOne({
             from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('HH:mm:ss')
         })
-
         res.sendStatus(201)
         mongoClient.close();
+
     } catch (error) {
-        res.status(500).send('erro :(');
+        res.sendStatus(500);
         mongoClient.close();
     }
 });
